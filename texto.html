@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convertir Lenguaje de Señas a Texto o Voz</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose"></script>
+</head>
+<body>
+    <header>
+        <h1>Convertir Lenguaje de Señas a Texto o Voz</h1>
+        <a href="panel_estudiante.html" class="back-link">← Volver a la Página Principal</a>
+    </header>
+
+    <main>
+        <section id="sign-to-text">
+            <h2>Conversión en Tiempo Real</h2>
+            <div class="sign-camera">
+                <p>Haz lenguaje de señas frente a la cámara y verás la conversión a texto o voz aquí.</p>
+                <div id="camera-box">
+                    <video id="video" autoplay playsinline width="640" height="480"></video>
+                </div>
+            </div>
+            <button class="boton-transcripcion" onclick="startSignRecognition()">Iniciar Reconocimiento</button>
+            <div id="sign-output">
+                <p id="output">Esperando conversión de señas...</p>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Plataforma Inclusiva. Todos los derechos reservados.</p>
+    </footer>
+
+    <script>
+        let model;
+        const video = document.getElementById('video');
+        const output = document.getElementById('output');
+        let lastX = null;
+        let movementCounter = 0;
+        let clapCounter = 0;
+
+        async function setupCamera() {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: 640, height: 480 },
+                audio: false
+            });
+            video.srcObject = stream;
+            return new Promise((resolve) => {
+                video.onloadedmetadata = () => {
+                    resolve(video);
+                };
+            });
+        }
+
+        async function loadModel() {
+            model = await handpose.load();
+            console.log("Modelo de detección de manos cargado");
+        }
+
+        async function detectHandMovement() {
+            const predictions = await model.estimateHands(video);
+            if (predictions.length > 0) {
+                const xPos = predictions[0].landmarks[0][0]; // Coordenada X de la mano
+                
+                if (lastX !== null) {
+                    const movement = Math.abs(xPos - lastX);
+                    if (movement > 30) { // Detectar agitación
+                        movementCounter++;
+                    }
+                }
+                lastX = xPos;
+
+                if (movementCounter > 3) { // Si hay suficiente movimiento
+                    output.textContent = "Hola";
+                    movementCounter = 0; // Reiniciar contador
+                }
+            }
+            requestAnimationFrame(detectHandMovement);
+        }
+
+        async function detectNumbers() {
+            const predictions = await model.estimateHands(video);
+            if (predictions.length > 0) {
+                const landmarks = predictions[0].landmarks;
+                
+                // Detectar cuántos dedos están levantados
+                let fingersUp = 0;
+                const fingerTips = [4, 8, 12, 16, 20]; // Puntos clave de las yemas de los dedos
+                const fingerBases = [2, 5, 9, 13, 17]; // Base de cada dedo
+                
+                for (let i = 0; i < 5; i++) {
+                    if (landmarks[fingerTips[i]][1] < landmarks[fingerBases[i]][1]) {
+                        fingersUp++;
+                    }
+                }
+                
+                // Mostrar el número detectado
+                const numberNames = ["Cero", "Uno", "Dos", "Tres", "Cuatro", "Cinco"];
+                if (fingersUp >= 0 && fingersUp <= 5) {
+                    output.textContent = numberNames[fingersUp];
+                }
+            }
+            requestAnimationFrame(detectNumbers);
+        }
+
+        /*async function detectClaps() {
+            const predictions = await model.estimateHands(video);
+            if (predictions.length === 2) {
+                const hand1 = predictions[0].landmarks[0]; // Mano 1 (dedo índice)
+                const hand2 = predictions[1].landmarks[0]; // Mano 2 (dedo índice)
+                
+                const distance = Math.abs(hand1[0] - hand2[0]);
+                
+                if (distance < 50) { // Si las manos están muy cerca
+                    clapCounter++;
+                }
+
+                if (clapCounter > 5) { // Si se detectan suficientes aplausos
+                    output.textContent = "Aplausos";
+                    clapCounter = 0; // Reiniciar contador
+                }
+            }
+            requestAnimationFrame(detectClaps);
+        }*/
+
+        async function startSignRecognition() {
+            await setupCamera();
+            await loadModel();
+            detectHandMovement();
+            detectNumbers();
+            //detectClaps();
+        }
+    </script>
+</body>
+</html>
